@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Mathnasium Calendar Expander",
+  "version": "1",
+  "description": "Expands the Radius scheduling calendar so it prints in full without scrollbars.",
+  "content_scripts": [
+    {
+      "matches": ["https://radius.mathnasium.com/Scheduling/Calendar*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Expand calendar for printing"
+  },
+  "permissions": []
+}
