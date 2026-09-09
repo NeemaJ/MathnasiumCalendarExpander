@@ -27,13 +27,8 @@ function expandCalendar() {
   if (!root) return false;
 
   let changed = false;
-  const els = [root, ...root.querySelectorAll('*')];
 
-  els.forEach((el) => {
-    const style = getComputedStyle(el);
-
-    // `mnW`/`mnH` mark what we've already sized, so a later pass can never
-    // grow the same element a second time.
+  const fix = (el) => {
     // No clipping test on this axis: the calendar is held in by a max-width
     // while its overflow stays `visible`, so it never reads as clipping even
     // though its content is wider than it is and spills out of the card.
@@ -44,10 +39,13 @@ function expandCalendar() {
       el.style.overflowX = 'visible';
       changed = true;
     }
+    // getComputedStyle is the costly part of this walk -- a thousand elements,
+    // several passes -- so reach for it only on the handful that actually
+    // overflow vertically.
     if (
       !el.dataset.mnH &&
-      CLIPS.test(style.overflowY) &&
-      el.scrollHeight > el.clientHeight + 1
+      el.scrollHeight > el.clientHeight + 1 &&
+      CLIPS.test(getComputedStyle(el).overflowY)
     ) {
       el.dataset.mnH = '1';
       // `auto`, not a pixel height. scrollHeight lies here: the calendar's
@@ -59,7 +57,10 @@ function expandCalendar() {
       el.style.overflowY = 'visible';
       changed = true;
     }
-  });
+  };
+
+  fix(root);
+  for (const el of root.querySelectorAll('*')) fix(el);
 
   return changed;
 }
@@ -83,6 +84,14 @@ function ensureUnclipStyle() {
     /* The page caps the calendar at the width of its card, so the schedule is
        cut off however wide we make the scrolling parts inside it. */
     ${CAL} { max-width: none !important; }
+    /* Once widened, the schedule reaches past the card it sits in, so the
+       card's border is left running down through the middle of it. The
+       calendar paints over its ancestors, so an opaque background hides that
+       line -- which is exactly what happens by accident on today's date, where
+       the site fills the current day's cells with white. Covering it costs no
+       width; widening the card would push the page into a horizontal scroll,
+       since the card is the schedule's width plus its own 2px borders. */
+    ${CAL} { background-color: #fff !important; }
     /* Deliberately NOT touching overflow here: expandCalendar detects the
        horizontal clipping by reading it, and would skip widening the body if
        this rule cleared it first. It clears overflow itself once widened. */
@@ -232,59 +241,73 @@ function addButtons() {
 
   const wrap = document.createElement('div');
   wrap.id = 'mn-btns';
+  // Bottom right: the site puts its own account and search controls in the top
+  // right, and a fixed bar there sits on top of them.
   Object.assign(wrap.style, {
     position: 'fixed',
-    top: '12px',
-    right: '12px',
+    bottom: '16px',
+    right: '16px',
     zIndex: 999999,
-    display: 'flex',
-    gap: '8px',
   });
 
-  const makeBtn = (id, label, color, onClick) => {
-    const btn = document.createElement('button');
-    btn.id = id;
-    btn.textContent = label;
-    Object.assign(btn.style, {
-      padding: '8px 14px',
-      background: color,
-      color: '#fff',
-      border: 'none',
-      borderRadius: '6px',
-      fontSize: '13px',
-      fontFamily: 'sans-serif',
-      cursor: 'pointer',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-    });
-    btn.addEventListener('click', onClick);
-    return btn;
-  };
+  const btn = document.createElement('button');
+  btn.id = 'mn-print-btn';
+  btn.textContent = 'Print schedule';
+  Object.assign(btn.style, {
+    padding: '8px 14px',
+    background: '#1d4ed8',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontFamily: 'sans-serif',
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+  });
+  btn.addEventListener('click', () => window.print());
 
-  wrap.appendChild(makeBtn('mn-expand-btn', 'Expand for printing', '#2d6a4f', expandFully));
-  wrap.appendChild(makeBtn('mn-print-btn', 'Print schedule', '#1d4ed8', () => window.print()));
+  wrap.appendChild(btn);
   document.body.appendChild(wrap);
 }
 
 // --- Wiring --------------------------------------------------------------
 
-// Run once the calendar has had a chance to render.
-setTimeout(() => {
+function setUp() {
   expandFully();
   updatePrintStyle();
   addButtons();
-}, 1500);
+}
 
-// The calendar re-renders via AJAX when the date/center changes, which
-// re-introduces the scroll clipping. Watch for that and re-expand.
-let expandTimer;
-const observer = new MutationObserver(() => {
-  clearTimeout(expandTimer);
-  expandTimer = setTimeout(() => {
-    expandFully();
-    addButtons();
-  }, 800);
-});
-observer.observe(document.body, { childList: true, subtree: true });
+// Changing the date or the center navigates the browser to a fresh page
+// (redirectToCalendar assigns window.location), so there is no AJAX re-render
+// to chase and nothing to gain from watching the document. The only thing
+// worth noticing is the calendar being swapped out in place, so watch its
+// container alone: a document-wide subtree observer fires on every unrelated
+// widget this page touches, and each firing costs a full relayout pass over a
+// thousand elements.
+function watchForRerender(root) {
+  const parent = root.parentElement;
+  if (!parent) return;
+  let timer;
+  new MutationObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(setUp, 300);
+  }).observe(parent, { childList: true });
+}
+
+// The page builds the calendar from its own script after load, so wait for it
+// to appear rather than betting on a fixed delay.
+let waited = 0;
+const startup = setInterval(() => {
+  const root = document.querySelector(CAL);
+  if (root) {
+    clearInterval(startup);
+    setUp();
+    watchForRerender(root);
+  } else if ((waited += 200) >= 30000) {
+    clearInterval(startup);
+  }
+}, 200);
 
 // Recompute immediately before printing, so Ctrl+P behaves exactly like the
 // button and the scale always matches whatever is on screen right now.

@@ -12,16 +12,14 @@ and makes it print at full page width in landscape.
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked** and select this folder.
-5. Visit the calendar page. After a second or so it auto-expands and centers.
-   If you change the date or center, it re-expands automatically.
-6. Two buttons appear in the top-right corner:
-   - **Expand for printing** — removes the scroll clipping and centers the
-     schedule on screen.
-   - **Print schedule** — opens the print dialog.
+5. Visit the calendar page. It expands and centers itself as soon as the
+   calendar has rendered. Changing the date or the center reloads the page,
+   and it expands again on its own.
+6. A **Print schedule** button appears in the bottom-right corner. It does
+   the same thing as Ctrl+P / Cmd+P -- use whichever you prefer.
 
 Leave the print dialog's scale at the default 100% and its layout at whatever
-it defaults to — the extension sets landscape and does the sizing itself.
-Printing with Ctrl+P / Cmd+P gives exactly the same result as the button.
+it defaults to: the extension sets landscape and does the sizing itself.
 
 ## Printing
 
