@@ -138,6 +138,55 @@ function expandFully() {
   centerCalendar();
 }
 
+// --- Date heading --------------------------------------------------------
+
+// Which day is on screen. The date picker holds it in the centre's own format
+// (M/d/yyyy, which is what the page configures Kendo with); once you have
+// stepped to another day the URL carries it as well, as an ISO date.
+function scheduleDate() {
+  const picker = document.getElementById('calendarDatePicker');
+  const shown = picker && picker.value && picker.value.trim();
+  if (shown) {
+    const [month, day, year] = shown.split('/').map(Number);
+    if (month && day && year) return new Date(year, month - 1, day);
+  }
+
+  const param = new URLSearchParams(location.search).get('Date');
+  if (param) {
+    const [year, month, day] = param.split('-').map(Number);
+    if (year && month && day) return new Date(year, month - 1, day);
+  }
+
+  return null;
+}
+
+// A printed schedule loses every bit of context the page gives it -- the date
+// picker included -- so print the day it belongs to above it. Kept out of the
+// on-screen view, where the picker already says which day this is.
+function updateDateHeading() {
+  const date = scheduleDate();
+  let heading = document.getElementById('mn-print-date');
+
+  if (!date) {
+    if (heading) heading.remove();
+    return;
+  }
+
+  if (!heading) {
+    heading = document.createElement('div');
+    heading.id = 'mn-print-date';
+    heading.style.display = 'none';
+    document.body.insertBefore(heading, document.body.firstChild);
+  }
+
+  heading.textContent = date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 // --- Printing ------------------------------------------------------------
 
 // Mark every wrapper between <body> and the calendar, so the print stylesheet
@@ -192,9 +241,17 @@ function updatePrintStyle() {
       /* Drop everything that isn't the calendar or on the path down to it.
          Hiding with visibility would leave the boxes in flow, and that empty
          space is what pushes the schedule onto a second and third page. */
-      body > *:not(.${ANCESTOR_CLASS}):not(${CAL}),
+      body > *:not(.${ANCESTOR_CLASS}):not(${CAL}):not(#mn-print-date),
       .${ANCESTOR_CLASS} > *:not(.${ANCESTOR_CLASS}):not(${CAL}) {
         display: none !important;
+      }
+      /* Sits outside the calendar, so the scale applied to the schedule
+         doesn't shrink it along with everything else. */
+      #mn-print-date {
+        display: block !important;
+        margin: 0 0 6pt !important;
+        font: bold 12pt/1.25 system-ui, -apple-system, sans-serif !important;
+        color: #000 !important;
       }
       /* Neutralise the wrappers themselves: their padding, clipping and
          positioning would otherwise offset or crop the printed schedule. */
@@ -274,6 +331,7 @@ function addButtons() {
 
 function setUp() {
   expandFully();
+  updateDateHeading();
   updatePrintStyle();
   addButtons();
 }
@@ -313,6 +371,7 @@ const startup = setInterval(() => {
 // button and the scale always matches whatever is on screen right now.
 window.addEventListener('beforeprint', () => {
   expandFully();
+  updateDateHeading();
   updatePrintStyle();
 });
 

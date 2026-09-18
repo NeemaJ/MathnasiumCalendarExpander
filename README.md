@@ -28,8 +28,11 @@ runs to whatever height that gives it -- continuing onto a second page if the
 day is long. The scale is a single uniform factor, so nothing is stretched or
 squashed and the text keeps its shape.
 
+The date of the schedule being printed is shown above it, since a printed
+page otherwise carries nothing to say which day it is.
+
 Everything else on the page -- nav, sidebar, footer, the extension's own
-buttons -- is removed from the print, so none of it can crop the schedule or
+button -- is removed from the print, so none of it can crop the schedule or
 add blank pages.
 
 One setting at the top of `content.js`: `PAGE` is the paper width in inches,
