@@ -21,6 +21,14 @@ and makes it print at full page width in landscape.
 Leave the print dialog's scale at the default 100% and its layout at whatever
 it defaults to: the extension sets landscape and does the sizing itself.
 
+## Student order
+
+Students who share a time block -- same start and same end -- are listed in
+alphabetical order by first name, top to bottom, both on screen and in print.
+Two students with the same first name are ordered by their full name. Each
+student keeps a row the page already gave that block, so nothing else on the
+schedule moves, and clicking a student still opens that student's record.
+
 ## Printing
 
 The schedule is scaled to span the full width of one landscape page, and then
