@@ -15,6 +15,36 @@ const PX_PER_IN = 96;
 const CAL = '.ec';
 const ANCESTOR_CLASS = 'mn-print-ancestor';
 
+// On/off switch, remembered per browser. Kept in the page's localStorage
+// rather than chrome.storage because sort-students.js has to read it too, from
+// the page's own world, synchronously, before any of the page's scripts run --
+// and chrome.storage is neither synchronous nor reachable from there. The key
+// is duplicated in that file; keep the two in step.
+const ENABLED_KEY = 'mnCalendarExpander.enabled';
+
+function isEnabled() {
+  try {
+    return localStorage.getItem(ENABLED_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+// Reload rather than tear down in place: students are sorted before the
+// calendar is first drawn, so the original order only comes back with a fresh
+// draw, and a fresh page is also the one state guaranteed to have none of the
+// extension's changes left in it.
+function setEnabled(on) {
+  try {
+    localStorage.setItem(ENABLED_KEY, on ? '1' : '0');
+  } catch {
+    return;
+  }
+  location.reload();
+}
+
+const enabled = isEnabled();
+
 // --- Expanding -----------------------------------------------------------
 
 // Used for height only. An element whose children simply overflow it, with
@@ -286,54 +316,136 @@ function updatePrintStyle() {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
-      #mn-btns { display: none !important; }
     }
   `;
 }
 
 // --- UI ------------------------------------------------------------------
 
-function addButtons() {
+// Styles for the controls, needed whether the extension is on or off -- the
+// switch stays on screen either way so it can be turned back on -- and they
+// keep the controls off the printed page in both states.
+function ensureControlsStyle() {
+  if (document.getElementById('mn-controls-style')) return;
+  const style = document.createElement('style');
+  style.id = 'mn-controls-style';
+  style.textContent = `
+    /* Bottom right: the site puts its own account and search controls in the
+       top right, and a fixed bar there sits on top of them. */
+    #mn-btns {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      z-index: 999999;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #mn-btns button {
+      margin: 0;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font: 13px/1.2 system-ui, -apple-system, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+    #mn-btns button:focus-visible {
+      outline: 2px solid #1d4ed8;
+      outline-offset: 2px;
+    }
+    #mn-print-btn {
+      background: #1d4ed8;
+      color: #fff;
+    }
+    #mn-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      color: #111;
+    }
+    #mn-toggle .mn-track {
+      position: relative;
+      flex: none;
+      width: 28px;
+      height: 16px;
+      border-radius: 8px;
+      background: #9ca3af;
+      transition: background 0.15s;
+    }
+    #mn-toggle .mn-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.15s;
+    }
+    #mn-toggle[aria-checked='true'] .mn-track {
+      background: #16a34a;
+    }
+    #mn-toggle[aria-checked='true'] .mn-track::after {
+      transform: translateX(12px);
+    }
+    @media print {
+      #mn-btns { display: none !important; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function addControls() {
   if (document.getElementById('mn-btns')) return;
+  ensureControlsStyle();
 
   const wrap = document.createElement('div');
   wrap.id = 'mn-btns';
-  // Bottom right: the site puts its own account and search controls in the top
-  // right, and a fixed bar there sits on top of them.
-  Object.assign(wrap.style, {
-    position: 'fixed',
-    bottom: '16px',
-    right: '16px',
-    zIndex: 999999,
-  });
 
-  const btn = document.createElement('button');
-  btn.id = 'mn-print-btn';
-  btn.textContent = 'Print schedule';
-  Object.assign(btn.style, {
-    padding: '8px 14px',
-    background: '#1d4ed8',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '13px',
-    fontFamily: 'sans-serif',
-    cursor: 'pointer',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-  });
-  btn.addEventListener('click', () => window.print());
+  // The print button is the extension's own, so it goes when the extension
+  // is off: Ctrl+P then prints the page exactly as the site does.
+  if (enabled) {
+    const print = document.createElement('button');
+    print.type = 'button';
+    print.id = 'mn-print-btn';
+    print.textContent = 'Print schedule';
+    print.addEventListener('click', () => window.print());
+    wrap.appendChild(print);
+  }
 
-  wrap.appendChild(btn);
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.id = 'mn-toggle';
+  toggle.setAttribute('role', 'switch');
+  toggle.setAttribute('aria-checked', String(enabled));
+  toggle.title = enabled
+    ? 'Turn the Calendar Expander off (reloads the page)'
+    : 'Turn the Calendar Expander on (reloads the page)';
+
+  const track = document.createElement('span');
+  track.className = 'mn-track';
+  track.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('span');
+  label.textContent = enabled ? 'Expander on' : 'Expander off';
+  toggle.append(track, label);
+  toggle.addEventListener('click', () => setEnabled(!enabled));
+  wrap.appendChild(toggle);
+
   document.body.appendChild(wrap);
 }
 
 // --- Wiring --------------------------------------------------------------
 
 function setUp() {
-  expandFully();
-  updateDateHeading();
-  updatePrintStyle();
-  addButtons();
+  if (enabled) {
+    expandFully();
+    updateDateHeading();
+    updatePrintStyle();
+  }
+  addControls();
 }
 
 // Changing the date or the center navigates the browser to a fresh page
@@ -361,27 +473,29 @@ const startup = setInterval(() => {
   if (root) {
     clearInterval(startup);
     setUp();
-    watchForRerender(root);
+    if (enabled) watchForRerender(root);
   } else if ((waited += 200) >= 30000) {
     clearInterval(startup);
   }
 }, 200);
 
-// Recompute immediately before printing, so Ctrl+P behaves exactly like the
-// button and the scale always matches whatever is on screen right now.
-window.addEventListener('beforeprint', () => {
-  expandFully();
-  updateDateHeading();
-  updatePrintStyle();
-});
+if (enabled) {
+  // Recompute immediately before printing, so Ctrl+P behaves exactly like the
+  // button and the scale always matches whatever is on screen right now.
+  window.addEventListener('beforeprint', () => {
+    expandFully();
+    updateDateHeading();
+    updatePrintStyle();
+  });
 
-// The print rules leave the on-screen layout alone, but the schedule may have
-// grown while expanding, so re-center once the dialog closes.
-window.addEventListener('afterprint', centerCalendar);
+  // The print rules leave the on-screen layout alone, but the schedule may
+  // have grown while expanding, so re-center once the dialog closes.
+  window.addEventListener('afterprint', centerCalendar);
 
-// Keep the calendar centered as the window resizes.
-let resizeTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(centerCalendar, 150);
-});
+  // Keep the calendar centered as the window resizes.
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(centerCalendar, 150);
+  });
+}

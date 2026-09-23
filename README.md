@@ -18,6 +18,12 @@ and makes it print at full page width in landscape.
 6. A **Print schedule** button appears in the bottom-right corner. It does
    the same thing as Ctrl+P / Cmd+P -- use whichever you prefer.
 
+7. Next to it is an **Expander on / off** switch. Turning it off reloads the
+   page exactly as the site draws it: the calendar back in its scrolling box,
+   students in the site's own order, and normal printing. Turning it back on
+   reloads with everything restored. Your choice is remembered, including
+   when you change the date or the center.
+
 Leave the print dialog's scale at the default 100% and its layout at whatever
 it defaults to: the extension sets landscape and does the sizing itself.
 

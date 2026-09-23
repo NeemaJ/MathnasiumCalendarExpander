@@ -13,6 +13,14 @@
 // sorted order, with nothing to redraw afterwards.
 
 (() => {
+  // The on/off switch content.js puts on the page. Same key as there; keep
+  // the two in step.
+  try {
+    if (localStorage.getItem('mnCalendarExpander.enabled') === '0') return;
+  } catch {
+    // Storage blocked: stay on, which is the default.
+  }
+
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
   const firstName = (event) => String(event.title || '').trim().split(/\s+/)[0];
