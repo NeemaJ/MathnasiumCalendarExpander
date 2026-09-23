@@ -52,6 +52,36 @@ const enabled = isEnabled();
 // inflates the row, then feeds the next pass and ratchets further.
 const CLIPS = /auto|scroll|hidden|clip/;
 
+// Whether an element is too narrow for the boxes inside it -- the calendar
+// being squeezed -- as opposed to too narrow for its own text. The two look
+// the same to scrollWidth, but only the first is ours to undo. Text that runs
+// past a fixed-width cell is the page's own truncation: a "Blocked 03:00 PM"
+// time label in its 100px column, say, where the site pins the width with
+// !important so widening can't take, and making the overflow visible instead
+// turns the label into a scroll box. An event block is no different: its
+// width is its duration, and stretching it to fit a long name would show the
+// session running past its end.
+function boxOverflows(el) {
+  // Measured as if unscrolled, so a scroll container that happens to be
+  // scrolled all the way along still counts as clipping what's inside it.
+  const edge = el.getBoundingClientRect().left + el.clientLeft + el.clientWidth - el.scrollLeft;
+
+  // The box responsible needn't be a direct child: overflow carries up
+  // through every element that doesn't clip it, which is how a widened body
+  // pushes out past a calendar root whose own child is stretched to fit it.
+  // A child that clips has contained whatever is inside it, so stop there.
+  const search = (parent) => {
+    for (const child of parent.children) {
+      const style = getComputedStyle(child);
+      if (style.display === 'none' || style.display === 'inline') continue;
+      if (child.getBoundingClientRect().right > edge + 1) return true;
+      if (style.overflowX === 'visible' && search(child)) return true;
+    }
+    return false;
+  };
+  return search(el);
+}
+
 function expandCalendar() {
   const root = document.querySelector(CAL);
   if (!root) return false;
@@ -62,7 +92,8 @@ function expandCalendar() {
     // No clipping test on this axis: the calendar is held in by a max-width
     // while its overflow stays `visible`, so it never reads as clipping even
     // though its content is wider than it is and spills out of the card.
-    if (!el.dataset.mnW && el.scrollWidth > el.clientWidth + 1) {
+    // What's tested instead is where the overflow comes from.
+    if (!el.dataset.mnW && el.scrollWidth > el.clientWidth + 1 && boxOverflows(el)) {
       el.dataset.mnW = '1';
       el.style.width = el.scrollWidth + 'px';
       el.style.maxWidth = 'none';
@@ -311,8 +342,15 @@ function updatePrintStyle() {
         max-width: none !important;
         max-height: none !important;
       }
-      ${CAL}, ${CAL} * {
+      /* Nothing that scrolls on screen may scroll away on paper, so the
+         calendar's own containers mustn't clip. Only those: the cells inside
+         them clip their text on purpose -- a "Blocked 03:00 PM" label cut off
+         at its 100px column -- and unclipping those as well prints each such
+         label over the top of the next. */
+      ${CAL}, ${CAL} .ec-header, ${CAL} .ec-body, ${CAL} .ec-sidebar, ${CAL} .ec-content {
         overflow: visible !important;
+      }
+      ${CAL}, ${CAL} * {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
